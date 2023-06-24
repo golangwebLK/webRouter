@@ -14,6 +14,12 @@ type Server struct {
 	HttpServer *http.Server
 }
 
+func NewServer(server *http.Server) *Server {
+	return &Server{
+		HttpServer: server,
+	}
+}
+
 func (s *Server) Run() {
 	// 启动服务器
 	go func() {
