@@ -10,21 +10,32 @@ import (
 	"time"
 )
 
-type Server struct {
-	HttpServer *http.Server
+type OptionServer interface {
+	apply(server *http.Server)
 }
 
-func NewServer(server *http.Server) *Server {
-	return &Server{
-		HttpServer: server,
+type optionHttpServer func(server *http.Server)
+
+func (fn optionHttpServer) apply(server *http.Server) {
+	fn(server)
+}
+func WithOptionServer(fn func(server *http.Server)) OptionServer {
+	return optionHttpServer(func(server *http.Server) {
+		fn(server)
+	})
+}
+
+func Run(opts ...OptionServer) {
+
+	server := &http.Server{}
+	for _, opt := range opts {
+		opt.apply(server)
 	}
-}
 
-func (s *Server) Run() {
 	// 启动服务器
 	go func() {
-		log.Println("Server is start...ListenAndPort" + s.HttpServer.Addr)
-		err := s.HttpServer.ListenAndServe()
+		log.Println("Server is start...ListenAndPort" + server.Addr)
+		err := server.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
 			log.Println("Server error:", err)
 		}
@@ -42,7 +53,7 @@ func (s *Server) Run() {
 	defer cancel()
 
 	// 关闭服务器
-	err := s.HttpServer.Shutdown(ctx)
+	err := server.Shutdown(ctx)
 	if err != nil {
 		log.Println("Shutdown error:", err)
 	}

@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path"
 	"reflect"
 	"runtime"
+	"strings"
 )
 
 // Group is a group of routes and middlewares.
@@ -258,5 +260,51 @@ func checkPath(path string) {
 	// All non-empty paths must start with a slash
 	if len(path) > 0 && path[0] != '/' {
 		panic(fmt.Sprintf("path %s must start with a slash", path))
+	}
+}
+
+// Static serves files from the given file system root.
+// Internally a http.FileServer is used, therefore http.NotFound is used instead
+// of the Router's NotFound handler.
+// To use the operating system's file system implementation,
+// use :
+//
+//	router.Static("/static", "/var/www")
+func (group *Group) Static(absolutePath, root string) *Router {
+	return group.StaticFS(absolutePath, Dir(root, false))
+}
+
+// StaticFS works just like `Static()` but a custom `http.FileSystem` can be used instead.
+func (group *Group) StaticFS(absolutePath string, fs http.FileSystem) *Router {
+	if strings.Contains(absolutePath, ":") || strings.Contains(absolutePath, "*") {
+		panic("URL parameters can not be used when serving a static folder")
+	}
+	handler := group.createStaticHandler(absolutePath, fs)
+	urlPattern := path.Join(absolutePath, "/*filepath")
+
+	// Register GET and HEAD handlers
+	group.GET(urlPattern, handler)
+	group.HEAD(urlPattern, handler)
+	return group.router
+}
+
+func (group *Group) createStaticHandler(absolutePath string, fs http.FileSystem) HandlerFunc {
+	fileServer := http.StripPrefix(absolutePath, http.FileServer(fs))
+	return func(w http.ResponseWriter, req Request) error {
+		if _, noListing := fs.(*onlyFilesFS); noListing {
+			w.WriteHeader(http.StatusNotFound)
+		}
+
+		file := req.Param("filepath")
+		// Check if file exists and/or if we have permission to access it
+		f, err := fs.Open(file)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return err
+		}
+		f.Close()
+
+		fileServer.ServeHTTP(w, req.Request)
+		return nil
 	}
 }
