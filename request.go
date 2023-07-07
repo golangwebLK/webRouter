@@ -238,13 +238,11 @@ func JSON(code int, w http.ResponseWriter, msg string, value interface{}) error 
 	if value == nil {
 		return nil
 	}
-	if code != http.StatusOK {
-		w.WriteHeader(code)
-	}
 	w.Header().Set("Content-Type", "application/json")
 
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(H{
+		"code": code,
 		"msg":  msg,
 		"data": value,
 	}); err != nil {
